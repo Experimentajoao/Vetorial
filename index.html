@@ -1,0 +1,1088 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Cálculo Vetorial</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0e1a;
+            --bg-secondary: #111827;
+            --bg-card: #1a2035;
+            --bg-input: #0d1220;
+            --border: #2a3550;
+            --border-active: #4f7cff;
+            --text-primary: #e8ecf4;
+            --text-secondary: #8892a8;
+            --text-muted: #5a6580;
+            --accent-blue: #4f7cff;
+            --accent-cyan: #22d3ee;
+            --accent-green: #34d399;
+            --accent-red: #f87171;
+            --accent-orange: #fb923c;
+            --accent-purple: #a78bfa;
+            --gradient-positive: #34d399;
+            --gradient-negative: #f87171;
+            --gradient-zero: #4f7cff;
+        }
+
+```
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+        font-family: 'DM Sans', sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        min-height: 100vh;
+        overflow-x: hidden;
+    }
+
+    .noise-overlay {
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+        pointer-events: none;
+        z-index: 999;
+    }
+
+    .glow-orb {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(120px);
+        opacity: 0.08;
+        pointer-events: none;
+        z-index: 0;
+    }
+    .glow-orb.blue { width: 500px; height: 500px; background: var(--accent-blue); top: -100px; right: -100px; }
+    .glow-orb.cyan { width: 400px; height: 400px; background: var(--accent-cyan); bottom: -50px; left: -50px; }
+
+    header {
+        position: relative;
+        z-index: 1;
+        text-align: center;
+        padding: 32px 20px 12px;
+    }
+
+    header h1 {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: clamp(1.4rem, 3vw, 2rem);
+        font-weight: 700;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue), var(--accent-purple));
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+    }
+
+    header p {
+        font-size: 0.85rem;
+        color: var(--text-secondary);
+        margin-top: 6px;
+        letter-spacing: 0.3px;
+    }
+
+    .app-container {
+        position: relative;
+        z-index: 1;
+        display: grid;
+        grid-template-columns: 320px 1fr;
+        gap: 16px;
+        max-width: 1280px;
+        margin: 16px auto;
+        padding: 0 20px 40px;
+        min-height: calc(100vh - 140px);
+    }
+
+    @media (max-width: 900px) {
+        .app-container {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    /* PANEL */
+    .control-panel {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        height: fit-content;
+        position: sticky;
+        top: 20px;
+    }
+
+    .panel-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .panel-section-title {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.65rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 1.5px;
+        color: var(--text-muted);
+        padding-bottom: 6px;
+        border-bottom: 1px solid var(--border);
+    }
+
+    /* TABS */
+    .tabs {
+        display: flex;
+        gap: 4px;
+        background: var(--bg-input);
+        padding: 4px;
+        border-radius: 10px;
+    }
+
+    .tab {
+        flex: 1;
+        padding: 8px 6px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        border: none;
+        border-radius: 7px;
+        background: transparent;
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.25s ease;
+        text-align: center;
+    }
+
+    .tab:hover { color: var(--text-primary); }
+
+    .tab.active {
+        background: var(--accent-blue);
+        color: white;
+        box-shadow: 0 2px 10px rgba(79, 124, 255, 0.3);
+    }
+
+    .tab.active[data-op="gradiente"] { background: var(--accent-green); box-shadow: 0 2px 10px rgba(52, 211, 153, 0.3); }
+    .tab.active[data-op="divergente"] { background: var(--accent-orange); box-shadow: 0 2px 10px rgba(251, 146, 60, 0.3); }
+    .tab.active[data-op="rotacional"] { background: var(--accent-purple); box-shadow: 0 2px 10px rgba(167, 139, 250, 0.3); }
+
+    /* INPUTS */
+    .input-group {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+    }
+
+    .input-group label {
+        font-size: 0.75rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+    }
+
+    .input-group input, .input-group select {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-input);
+        color: var(--text-primary);
+        outline: none;
+        transition: border-color 0.2s;
+    }
+
+    .input-group input:focus, .input-group select:focus {
+        border-color: var(--border-active);
+        box-shadow: 0 0 0 3px rgba(79, 124, 255, 0.1);
+    }
+
+    .preset-btn {
+        padding: 7px 10px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        font-weight: 600;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: var(--bg-input);
+        color: var(--text-secondary);
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: left;
+    }
+
+    .preset-btn:hover {
+        border-color: var(--accent-blue);
+        color: var(--text-primary);
+        background: rgba(79, 124, 255, 0.08);
+    }
+
+    .preset-btn.active {
+        border-color: var(--accent-blue);
+        background: rgba(79, 124, 255, 0.12);
+        color: var(--accent-cyan);
+    }
+
+    .presets-grid {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    /* FORMULA DISPLAY */
+    .formula-display {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.82rem;
+        padding: 12px 14px;
+        border-radius: 8px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        color: var(--accent-cyan);
+        line-height: 1.6;
+        word-break: break-all;
+    }
+
+    .formula-display .label {
+        font-size: 0.65rem;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .result-value {
+        color: var(--accent-green);
+        font-weight: 700;
+    }
+
+    .result-value.negative { color: var(--accent-red); }
+    .result-value.zero { color: var(--accent-blue); }
+
+    /* CANVAS AREA */
+    .canvas-area {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
+    .canvas-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--border);
+        background: rgba(0,0,0,0.15);
+    }
+
+    .canvas-header .title-badge {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.7rem;
+        font-weight: 600;
+        padding: 5px 12px;
+        border-radius: 6px;
+        letter-spacing: 0.5px;
+    }
+
+    .canvas-header .title-badge.gradiente { background: rgba(52,211,153,0.15); color: var(--accent-green); }
+    .canvas-header .title-badge.divergente { background: rgba(251,146,60,0.15); color: var(--accent-orange); }
+    .canvas-header .title-badge.rotacional { background: rgba(167,139,250,0.15); color: var(--accent-purple); }
+
+    .canvas-info {
+        font-size: 0.7rem;
+        color: var(--text-muted);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    canvas {
+        width: 100%;
+        cursor: crosshair;
+    }
+
+    /* LEGEND */
+    .legend {
+        display: flex;
+        gap: 16px;
+        padding: 10px 18px;
+        border-top: 1px solid var(--border);
+        background: rgba(0,0,0,0.1);
+        flex-wrap: wrap;
+    }
+
+    .legend-item {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.68rem;
+        color: var(--text-secondary);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    .legend-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+    }
+
+    /* INFO CARD */
+    .info-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        padding: 20px;
+        margin-top: 16px;
+        line-height: 1.7;
+    }
+
+    .info-card h3 {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.85rem;
+        margin-bottom: 10px;
+        color: var(--accent-cyan);
+    }
+
+    .info-card p {
+        font-size: 0.82rem;
+        color: var(--text-secondary);
+    }
+
+    .info-card code {
+        font-family: 'JetBrains Mono', monospace;
+        background: var(--bg-input);
+        padding: 2px 7px;
+        border-radius: 4px;
+        font-size: 0.78rem;
+        color: var(--accent-cyan);
+    }
+
+    .slider-group {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    .slider-group label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--text-secondary);
+        display: flex;
+        justify-content: space-between;
+    }
+
+    .slider-group label span {
+        color: var(--accent-cyan);
+        font-family: 'JetBrains Mono', monospace;
+    }
+
+    input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        height: 6px;
+        border-radius: 3px;
+        background: var(--bg-input);
+        border: 1px solid var(--border);
+        outline: none;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--accent-blue);
+        cursor: pointer;
+        box-shadow: 0 2px 6px rgba(79, 124, 255, 0.4);
+    }
+
+    /* MOUSE INFO OVERLAY */
+    .mouse-info {
+        position: absolute;
+        bottom: 52px;
+        right: 16px;
+        background: rgba(10, 14, 26, 0.9);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 8px 12px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 0.68rem;
+        color: var(--text-secondary);
+        pointer-events: none;
+        z-index: 10;
+        backdrop-filter: blur(8px);
+        line-height: 1.6;
+    }
+
+    .mouse-info .coord { color: var(--accent-cyan); }
+    .mouse-info .val { color: var(--accent-green); font-weight: 700; }
+
+    /* Animations */
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .control-panel, .canvas-area {
+        animation: fadeIn 0.5s ease forwards;
+    }
+
+    .canvas-area { animation-delay: 0.1s; }
+</style>
+```
+
+</head>
+<body>
+
+<div class="noise-overlay"></div>
+<div class="glow-orb blue"></div>
+<div class="glow-orb cyan"></div>
+
+<header>
+    <h1>∇ Simulador de Cálculo Vetorial</h1>
+    <p>Gradiente · Divergente · Rotacional — visualização interativa em tempo real</p>
+</header>
+
+<div class="app-container">
+    <!-- CONTROL PANEL -->
+    <div class="control-panel">
+        <div class="panel-section">
+            <div class="panel-section-title">Operação</div>
+            <div class="tabs">
+                <button class="tab active" data-op="gradiente" onclick="setOperation('gradiente')">∇f</button>
+                <button class="tab" data-op="divergente" onclick="setOperation('divergente')">∇·F</button>
+                <button class="tab" data-op="rotacional" onclick="setOperation('rotacional')">∇×F</button>
+            </div>
+        </div>
+
+```
+    <div class="panel-section" id="scalarSection">
+        <div class="panel-section-title">Função Escalar f(x,y)</div>
+        <div class="input-group">
+            <label>Expressão</label>
+            <input type="text" id="scalarInput" value="x*x + y*y" spellcheck="false" oninput="scheduleUpdate()">
+        </div>
+        <div class="presets-grid">
+            <button class="preset-btn active" onclick="setScalarPreset(this, 'x*x + y*y')">f = x² + y² (paraboloide)</button>
+            <button class="preset-btn" onclick="setScalarPreset(this, 'sin(x)*cos(y)')">f = sin(x)·cos(y)</button>
+            <button class="preset-btn" onclick="setScalarPreset(this, 'x*y')">f = x·y (sela)</button>
+            <button class="preset-btn" onclick="setScalarPreset(this, 'exp(-(x*x+y*y)/4)')">f = e^(-(x²+y²)/4)</button>
+            <button class="preset-btn" onclick="setScalarPreset(this, 'sqrt(x*x+y*y)')">f = √(x²+y²)</button>
+        </div>
+    </div>
+
+    <div class="panel-section" id="vectorSection" style="display:none;">
+        <div class="panel-section-title">Campo Vetorial F(x,y)</div>
+        <div class="input-group">
+            <label>Componente Fx</label>
+            <input type="text" id="vectorFx" value="x" spellcheck="false" oninput="scheduleUpdate()">
+        </div>
+        <div class="input-group">
+            <label>Componente Fy</label>
+            <input type="text" id="vectorFy" value="y" spellcheck="false" oninput="scheduleUpdate()">
+        </div>
+        <div class="presets-grid">
+            <button class="preset-btn v-preset active" onclick="setVectorPreset(this, 'x','y')">F = (x, y) — fonte</button>
+            <button class="preset-btn v-preset" onclick="setVectorPreset(this, '-y','x')">F = (−y, x) — vórtice</button>
+            <button class="preset-btn v-preset" onclick="setVectorPreset(this, 'sin(y)','cos(x)')">F = (sin y, cos x)</button>
+            <button class="preset-btn v-preset" onclick="setVectorPreset(this, 'x*x-y*y','2*x*y')">F = (x²−y², 2xy)</button>
+            <button class="preset-btn v-preset" onclick="setVectorPreset(this, '-x/(x*x+y*y+0.1)','-y/(x*x+y*y+0.1)')">F — sumidouro</button>
+        </div>
+    </div>
+
+    <div class="panel-section">
+        <div class="panel-section-title">Visualização</div>
+        <div class="slider-group">
+            <label>Densidade <span id="densityVal">20</span></label>
+            <input type="range" id="density" min="10" max="40" value="20" oninput="updateDensity()">
+        </div>
+        <div class="slider-group">
+            <label>Escala <span id="scaleVal">1.0</span></label>
+            <input type="range" id="scale" min="0.2" max="3" value="1" step="0.1" oninput="updateScale()">
+        </div>
+        <div class="slider-group">
+            <label>Zoom (domínio) <span id="domainVal">5</span></label>
+            <input type="range" id="domain" min="1" max="20" value="5" step="0.5" oninput="updateDomain()">
+        </div>
+    </div>
+
+    <div class="panel-section" id="formulaSection">
+        <div class="panel-section-title">Resultado Analítico</div>
+        <div class="formula-display" id="formulaDisplay">
+            <span class="label">Gradiente ∇f</span>
+            <span id="formulaText">∇f = (2x, 2y)</span>
+        </div>
+    </div>
+</div>
+
+<!-- CANVAS -->
+<div style="display:flex;flex-direction:column;gap:0;min-width:0;">
+    <div class="canvas-area">
+        <div class="canvas-header">
+            <span class="title-badge gradiente" id="canvasBadge">GRADIENTE</span>
+            <span class="canvas-info" id="canvasInfo">Mova o mouse sobre o campo</span>
+        </div>
+        <div style="position:relative;">
+            <canvas id="mainCanvas" width="900" height="650"></canvas>
+            <div class="mouse-info" id="mouseInfo" style="display:none;">
+                <div>Ponto: (<span class="coord" id="miX">0</span>, <span class="coord" id="miY">0</span>)</div>
+                <div id="miExtra"></div>
+            </div>
+        </div>
+        <div class="legend" id="legendArea">
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent-green);"></div> Positivo</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent-red);"></div> Negativo</div>
+            <div class="legend-item"><div class="legend-dot" style="background:var(--accent-blue);"></div> ~Zero</div>
+        </div>
+    </div>
+
+    <div class="info-card" id="infoCard">
+        <h3>📐 Gradiente ∇f</h3>
+        <p>O <strong>gradiente</strong> de uma função escalar <code>f(x,y)</code> é um campo vetorial que aponta na direção de maior crescimento de <code>f</code>. 
+        Sua magnitude indica a taxa de variação. Matematicamente: <code>∇f = (∂f/∂x, ∂f/∂y)</code>. As setas mostram a direção e intensidade do gradiente em cada ponto. As curvas de nível são perpendiculares ao gradiente.</p>
+    </div>
+</div>
+```
+
+</div>
+
+<script>
+// ============================
+// STATE
+// ============================
+let currentOp = 'gradiente';
+let densityVal = 20;
+let scaleVal = 1.0;
+let domainVal = 5;
+let updateTimer = null;
+
+const canvas = document.getElementById('mainCanvas');
+const ctx = canvas.getContext('2d');
+
+// ============================
+// SAFE MATH PARSER
+// ============================
+function buildEvalFunc(expr) {
+    // Replace common math notations
+    let e = expr.replace(/\^/g, '**');
+    e = e.replace(/\bsin\b/g, 'Math.sin');
+    e = e.replace(/\bcos\b/g, 'Math.cos');
+    e = e.replace(/\btan\b/g, 'Math.tan');
+    e = e.replace(/\bexp\b/g, 'Math.exp');
+    e = e.replace(/\blog\b/g, 'Math.log');
+    e = e.replace(/\bsqrt\b/g, 'Math.sqrt');
+    e = e.replace(/\babs\b/g, 'Math.abs');
+    e = e.replace(/\bpi\b/gi, 'Math.PI');
+    try {
+        return new Function('x', 'y', `"use strict"; try { return (${e}); } catch(err) { return 0; }`);
+    } catch {
+        return () => 0;
+    }
+}
+
+// Numerical partial derivatives
+function numericalGradient(f, x, y, h = 0.0001) {
+    const dfdx = (f(x + h, y) - f(x - h, y)) / (2 * h);
+    const dfdy = (f(x, y + h) - f(x, y - h)) / (2 * h);
+    return { u: dfdx, v: dfdy };
+}
+
+function numericalDivergence(fx, fy, x, y, h = 0.0001) {
+    const dFxdx = (fx(x + h, y) - fx(x - h, y)) / (2 * h);
+    const dFydy = (fy(x, y + h) - fy(x, y - h)) / (2 * h);
+    return dFxdx + dFydy;
+}
+
+function numericalCurl(fx, fy, x, y, h = 0.0001) {
+    const dFydx = (fy(x + h, y) - fy(x - h, y)) / (2 * h);
+    const dFxdy = (fx(x, y + h) - fx(x, y - h)) / (2 * h);
+    return dFydx - dFxdy;
+}
+
+// ============================
+// COORDINATE TRANSFORMS
+// ============================
+function mathToCanvas(mx, my) {
+    const w = canvas.width, h = canvas.height;
+    const cx = w / 2 + (mx / domainVal) * (w / 2);
+    const cy = h / 2 - (my / domainVal) * (h / 2);
+    return [cx, cy];
+}
+
+function canvasToMath(px, py) {
+    const w = canvas.width, h = canvas.height;
+    const mx = (px - w / 2) / (w / 2) * domainVal;
+    const my = -(py - h / 2) / (h / 2) * domainVal;
+    return [mx, my];
+}
+
+// ============================
+// DRAWING HELPERS
+// ============================
+function drawGrid() {
+    const w = canvas.width, h = canvas.height;
+    ctx.strokeStyle = 'rgba(42, 53, 80, 0.4)';
+    ctx.lineWidth = 1;
+
+    // Grid lines
+    for (let i = -Math.floor(domainVal); i <= Math.floor(domainVal); i++) {
+        const [cx, cy] = mathToCanvas(i, 0);
+        const [_, cy2] = mathToCanvas(0, i);
+
+        ctx.beginPath();
+        ctx.moveTo(cx, 0);
+        ctx.lineTo(cx, h);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(0, cy2);
+        ctx.lineTo(w, cy2);
+        ctx.stroke();
+    }
+
+    // Axes
+    ctx.strokeStyle = 'rgba(79, 124, 255, 0.35)';
+    ctx.lineWidth = 1.5;
+    const [ox, oy] = mathToCanvas(0, 0);
+    ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, h); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, oy); ctx.lineTo(w, oy); ctx.stroke();
+
+    // Labels
+    ctx.fillStyle = 'rgba(136, 146, 168, 0.6)';
+    ctx.font = '11px JetBrains Mono';
+    ctx.textAlign = 'center';
+    for (let i = -Math.floor(domainVal); i <= Math.floor(domainVal); i++) {
+        if (i === 0) continue;
+        const [cx, cy] = mathToCanvas(i, 0);
+        const [_, cy2] = mathToCanvas(0, i);
+        ctx.fillText(i, cx, oy + 14);
+        ctx.fillText(i, ox - 14, cy2 + 4);
+    }
+    ctx.fillText('x', w - 14, oy - 6);
+    ctx.fillText('y', ox + 10, 14);
+}
+
+function drawArrow(px, py, ux, uy, color, alpha = 1) {
+    const mag = Math.sqrt(ux * ux + uy * uy);
+    if (mag < 0.3) return;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(px, py);
+    ctx.lineTo(px + ux, py + uy);
+    ctx.stroke();
+
+    const headLen = Math.min(5, mag * 0.35);
+    const angle = Math.atan2(uy, ux);
+    ctx.beginPath();
+    ctx.moveTo(px + ux, py + uy);
+    ctx.lineTo(px + ux - headLen * Math.cos(angle - 0.45), py + uy - headLen * Math.sin(angle - 0.45));
+    ctx.lineTo(px + ux - headLen * Math.cos(angle + 0.45), py + uy - headLen * Math.sin(angle + 0.45));
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+}
+
+function valueToColor(val, maxAbs) {
+    const t = Math.max(-1, Math.min(1, val / (maxAbs || 1)));
+    if (t > 0.05) {
+        const r = 52 + (255 - 52) * t * 0.3;
+        const g = 211 - 60 * t;
+        const b = 153 - 50 * t;
+        return `rgb(${r|0},${g|0},${b|0})`;
+    } else if (t < -0.05) {
+        const s = -t;
+        const r = 248;
+        const g = 113 - 50 * s;
+        const b = 113 - 30 * s;
+        return `rgb(${r|0},${g|0},${b|0})`;
+    }
+    return 'rgb(79, 124, 255)';
+}
+
+function magnitudeColor(mag, maxMag) {
+    const t = Math.min(1, mag / (maxMag || 1));
+    // Cyan to blue gradient
+    const r = 34 + (79 - 34) * t;
+    const g = 211 - (211 - 124) * t;
+    const b = 238 + (255 - 238) * t;
+    return `rgb(${r|0},${g|0},${b|0})`;
+}
+
+// ============================
+// CONTOUR LINES (for gradient mode)
+// ============================
+function drawContours(f, levels) {
+    const w = canvas.width, h = canvas.height;
+    const step = 3;
+    ctx.lineWidth = 0.8;
+
+    for (const level of levels) {
+        ctx.strokeStyle = 'rgba(79, 124, 255, 0.18)';
+        ctx.beginPath();
+        let drawing = false;
+
+        for (let px = 0; px < w; px += step) {
+            for (let py = 0; py < h; py += step) {
+                const [mx, my] = canvasToMath(px, py);
+                const v = f(mx, my);
+                const [mx2, my2] = canvasToMath(px + step, py);
+                const v2 = f(mx2, my2);
+                const [mx3, my3] = canvasToMath(px, py + step);
+                const v3 = f(mx3, my3);
+
+                if ((v - level) * (v2 - level) < 0 || (v - level) * (v3 - level) < 0) {
+                    ctx.rect(px, py, 1, 1);
+                }
+            }
+        }
+        ctx.stroke();
+    }
+}
+
+// ============================
+// HEATMAP (for divergence / curl)
+// ============================
+function drawHeatmap(valueFunc, opacity = 0.15) {
+    const w = canvas.width, h = canvas.height;
+    const cellSize = 8;
+    let maxAbs = 0;
+
+    // First pass: find max
+    const values = [];
+    for (let px = 0; px < w; px += cellSize) {
+        const row = [];
+        for (let py = 0; py < h; py += cellSize) {
+            const [mx, my] = canvasToMath(px + cellSize / 2, py + cellSize / 2);
+            const val = valueFunc(mx, my);
+            row.push(val);
+            if (isFinite(val)) maxAbs = Math.max(maxAbs, Math.abs(val));
+        }
+        values.push(row);
+    }
+
+    // Second pass: draw
+    let col = 0;
+    for (let px = 0; px < w; px += cellSize) {
+        let row = 0;
+        for (let py = 0; py < h; py += cellSize) {
+            const val = values[col][row];
+            if (isFinite(val) && Math.abs(val) > maxAbs * 0.02) {
+                const t = Math.max(-1, Math.min(1, val / maxAbs));
+                if (t > 0) {
+                    ctx.fillStyle = `rgba(52, 211, 153, ${t * opacity})`;
+                } else {
+                    ctx.fillStyle = `rgba(248, 113, 113, ${-t * opacity})`;
+                }
+                ctx.fillRect(px, py, cellSize, cellSize);
+            }
+            row++;
+        }
+        col++;
+    }
+
+    return maxAbs;
+}
+
+// ============================
+// MAIN RENDER
+// ============================
+function render() {
+    const w = canvas.width, h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Dark bg
+    ctx.fillStyle = '#0d1220';
+    ctx.fillRect(0, 0, w, h);
+
+    drawGrid();
+
+    const spacing = w / densityVal;
+    const arrowScale = scaleVal * (w / densityVal) * 0.35;
+
+    if (currentOp === 'gradiente') {
+        const f = buildEvalFunc(document.getElementById('scalarInput').value);
+
+        // Contour lines
+        const levels = [];
+        for (let i = -20; i <= 20; i += 1) levels.push(i);
+        drawContours(f, levels);
+
+        // Gradient arrows
+        let maxMag = 0;
+        const arrows = [];
+        for (let px = spacing / 2; px < w; px += spacing) {
+            for (let py = spacing / 2; py < h; py += spacing) {
+                const [mx, my] = canvasToMath(px, py);
+                const g = numericalGradient(f, mx, my);
+                const mag = Math.sqrt(g.u * g.u + g.v * g.v);
+                maxMag = Math.max(maxMag, mag);
+                arrows.push({ px, py, u: g.u, v: g.v, mag });
+            }
+        }
+
+        for (const a of arrows) {
+            const normMag = maxMag > 0 ? a.mag / maxMag : 0;
+            const len = normMag * arrowScale;
+            const angle = Math.atan2(a.v, a.u);
+            const ux = len * Math.cos(angle);
+            const uy = -len * Math.sin(angle); // flip y
+            drawArrow(a.px, a.py, ux, uy, magnitudeColor(a.mag, maxMag), 0.7 + normMag * 0.3);
+        }
+
+    } else if (currentOp === 'divergente') {
+        const fx = buildEvalFunc(document.getElementById('vectorFx').value);
+        const fy = buildEvalFunc(document.getElementById('vectorFy').value);
+
+        // Heatmap of divergence
+        const maxAbs = drawHeatmap((x, y) => numericalDivergence(fx, fy, x, y), 0.25);
+
+        // Vector field arrows
+        let maxMag = 0;
+        const arrows = [];
+        for (let px = spacing / 2; px < w; px += spacing) {
+            for (let py = spacing / 2; py < h; py += spacing) {
+                const [mx, my] = canvasToMath(px, py);
+                const u = fx(mx, my);
+                const v = fy(mx, my);
+                const div = numericalDivergence(fx, fy, mx, my);
+                const mag = Math.sqrt(u * u + v * v);
+                maxMag = Math.max(maxMag, mag);
+                arrows.push({ px, py, u, v, mag, div });
+            }
+        }
+
+        for (const a of arrows) {
+            const normMag = maxMag > 0 ? a.mag / maxMag : 0;
+            const len = normMag * arrowScale;
+            const angle = Math.atan2(a.v, a.u);
+            const ux = len * Math.cos(angle);
+            const uy = -len * Math.sin(angle);
+            const color = valueToColor(a.div, maxAbs);
+            drawArrow(a.px, a.py, ux, uy, color, 0.65 + normMag * 0.35);
+        }
+
+    } else if (currentOp === 'rotacional') {
+        const fx = buildEvalFunc(document.getElementById('vectorFx').value);
+        const fy = buildEvalFunc(document.getElementById('vectorFy').value);
+
+        // Heatmap of curl
+        const maxAbs = drawHeatmap((x, y) => numericalCurl(fx, fy, x, y), 0.25);
+
+        // Vector field arrows
+        let maxMag = 0;
+        const arrows = [];
+        for (let px = spacing / 2; px < w; px += spacing) {
+            for (let py = spacing / 2; py < h; py += spacing) {
+                const [mx, my] = canvasToMath(px, py);
+                const u = fx(mx, my);
+                const v = fy(mx, my);
+                const curl = numericalCurl(fx, fy, mx, my);
+                const mag = Math.sqrt(u * u + v * v);
+                maxMag = Math.max(maxMag, mag);
+                arrows.push({ px, py, u, v, mag, curl });
+            }
+        }
+
+        for (const a of arrows) {
+            const normMag = maxMag > 0 ? a.mag / maxMag : 0;
+            const len = normMag * arrowScale;
+            const angle = Math.atan2(a.v, a.u);
+            const ux = len * Math.cos(angle);
+            const uy = -len * Math.sin(angle);
+            const color = valueToColor(a.curl, maxAbs);
+            drawArrow(a.px, a.py, ux, uy, color, 0.65 + normMag * 0.35);
+        }
+    }
+}
+
+// ============================
+// UI LOGIC
+// ============================
+function setOperation(op) {
+    currentOp = op;
+
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab[data-op="${op}"]`).classList.add('active');
+
+    document.getElementById('scalarSection').style.display = op === 'gradiente' ? 'flex' : 'none';
+    document.getElementById('vectorSection').style.display = op !== 'gradiente' ? 'flex' : 'none';
+
+    const badge = document.getElementById('canvasBadge');
+    badge.className = `title-badge ${op}`;
+    badge.textContent = op === 'gradiente' ? 'GRADIENTE' : op === 'divergente' ? 'DIVERGENTE' : 'ROTACIONAL';
+
+    updateFormulaDisplay();
+    render();
+    updateInfoCard();
+}
+
+function setScalarPreset(btn, expr) {
+    document.querySelectorAll('#scalarSection .preset-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('scalarInput').value = expr;
+    updateFormulaDisplay();
+    render();
+}
+
+function setVectorPreset(btn, fx, fy) {
+    document.querySelectorAll('.v-preset').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('vectorFx').value = fx;
+    document.getElementById('vectorFy').value = fy;
+    updateFormulaDisplay();
+    render();
+}
+
+function updateDensity() {
+    densityVal = parseInt(document.getElementById('density').value);
+    document.getElementById('densityVal').textContent = densityVal;
+    render();
+}
+
+function updateScale() {
+    scaleVal = parseFloat(document.getElementById('scale').value);
+    document.getElementById('scaleVal').textContent = scaleVal.toFixed(1);
+    render();
+}
+
+function updateDomain() {
+    domainVal = parseFloat(document.getElementById('domain').value);
+    document.getElementById('domainVal').textContent = domainVal;
+    render();
+}
+
+function scheduleUpdate() {
+    clearTimeout(updateTimer);
+    updateTimer = setTimeout(() => {
+        updateFormulaDisplay();
+        render();
+    }, 200);
+}
+
+function updateFormulaDisplay() {
+    const display = document.getElementById('formulaDisplay');
+    const text = document.getElementById('formulaText');
+
+    if (currentOp === 'gradiente') {
+        const expr = document.getElementById('scalarInput').value;
+        display.querySelector('.label').textContent = 'Gradiente ∇f';
+        text.innerHTML = `f(x,y) = ${expr}<br><span style="color:var(--text-muted);">∇f = (∂f/∂x, ∂f/∂y) — calculado numericamente</span>`;
+    } else if (currentOp === 'divergente') {
+        const fx = document.getElementById('vectorFx').value;
+        const fy = document.getElementById('vectorFy').value;
+        display.querySelector('.label').textContent = 'Divergente ∇·F';
+        text.innerHTML = `F = (${fx}, ${fy})<br><span style="color:var(--text-muted);">∇·F = ∂Fx/∂x + ∂Fy/∂y</span>`;
+    } else {
+        const fx = document.getElementById('vectorFx').value;
+        const fy = document.getElementById('vectorFy').value;
+        display.querySelector('.label').textContent = 'Rotacional ∇×F';
+        text.innerHTML = `F = (${fx}, ${fy})<br><span style="color:var(--text-muted);">∇×F = ∂Fy/∂x − ∂Fx/∂y</span>`;
+    }
+}
+
+function updateInfoCard() {
+    const card = document.getElementById('infoCard');
+    if (currentOp === 'gradiente') {
+        card.innerHTML = `
+            <h3>📐 Gradiente ∇f</h3>
+            <p>O <strong>gradiente</strong> de uma função escalar <code>f(x,y)</code> é um campo vetorial que aponta na direção de <strong>maior crescimento</strong> de <code>f</code>. 
+            Sua magnitude indica a taxa de variação máxima. Matematicamente: <code>∇f = (∂f/∂x, ∂f/∂y)</code>. As linhas de contorno (azuis) são curvas onde <code>f</code> é constante — note que os vetores gradiente são sempre <strong>perpendiculares</strong> a elas.</p>`;
+    } else if (currentOp === 'divergente') {
+        card.innerHTML = `
+            <h3>🌊 Divergente ∇·F</h3>
+            <p>O <strong>divergente</strong> mede o quanto um campo vetorial "se espalha" ou "se concentra" em cada ponto. 
+            <code>∇·F = ∂Fx/∂x + ∂Fy/∂y</code>. Regiões <span style="color:var(--accent-green);">verdes</span> indicam <strong>fontes</strong> (div > 0 — fluxo para fora), 
+            regiões <span style="color:var(--accent-red);">vermelhas</span> indicam <strong>sumidouros</strong> (div < 0 — fluxo para dentro). É um operador escalar — retorna um número em cada ponto.</p>`;
+    } else {
+        card.innerHTML = `
+            <h3>🌀 Rotacional ∇×F</h3>
+            <p>O <strong>rotacional</strong> mede a tendência de rotação do campo vetorial. Em 2D: <code>(∇×F)_z = ∂Fy/∂x − ∂Fx/∂y</code>. 
+            Regiões <span style="color:var(--accent-green);">verdes</span> indicam rotação <strong>anti-horária</strong>, 
+            regiões <span style="color:var(--accent-red);">vermelhas</span> indicam rotação <strong>horária</strong>. 
+            Campos irrotacionais (como gradientes) têm rotacional zero — teste trocando entre as abas!</p>`;
+    }
+}
+
+// ============================
+// MOUSE INTERACTION
+// ============================
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const px = (e.clientX - rect.left) * scaleX;
+    const py = (e.clientY - rect.top) * scaleY;
+    const [mx, my] = canvasToMath(px, py);
+
+    const info = document.getElementById('mouseInfo');
+    info.style.display = 'block';
+    document.getElementById('miX').textContent = mx.toFixed(2);
+    document.getElementById('miY').textContent = my.toFixed(2);
+
+    const extra = document.getElementById('miExtra');
+
+    if (currentOp === 'gradiente') {
+        const f = buildEvalFunc(document.getElementById('scalarInput').value);
+        const val = f(mx, my);
+        const g = numericalGradient(f, mx, my);
+        extra.innerHTML = `f = <span class="val">${isFinite(val) ? val.toFixed(3) : '—'}</span><br>∇f = (<span class="val">${g.u.toFixed(3)}</span>, <span class="val">${g.v.toFixed(3)}</span>)`;
+    } else if (currentOp === 'divergente') {
+        const fx = buildEvalFunc(document.getElementById('vectorFx').value);
+        const fy = buildEvalFunc(document.getElementById('vectorFy').value);
+        const u = fx(mx, my), v = fy(mx, my);
+        const div = numericalDivergence(fx, fy, mx, my);
+        extra.innerHTML = `F = (<span class="val">${u.toFixed(3)}</span>, <span class="val">${v.toFixed(3)}</span>)<br>∇·F = <span class="val">${div.toFixed(3)}</span>`;
+    } else {
+        const fx = buildEvalFunc(document.getElementById('vectorFx').value);
+        const fy = buildEvalFunc(document.getElementById('vectorFy').value);
+        const u = fx(mx, my), v = fy(mx, my);
+        const curl = numericalCurl(fx, fy, mx, my);
+        extra.innerHTML = `F = (<span class="val">${u.toFixed(3)}</span>, <span class="val">${v.toFixed(3)}</span>)<br>∇×F = <span class="val">${curl.toFixed(3)}</span>`;
+    }
+
+    document.getElementById('canvasInfo').textContent = `(${mx.toFixed(2)}, ${my.toFixed(2)})`;
+});
+
+canvas.addEventListener('mouseleave', () => {
+    document.getElementById('mouseInfo').style.display = 'none';
+    document.getElementById('canvasInfo').textContent = 'Mova o mouse sobre o campo';
+});
+
+// ============================
+// RESIZE
+// ============================
+function resizeCanvas() {
+    const container = canvas.parentElement;
+    const w = container.clientWidth;
+    const ratio = window.devicePixelRatio || 1;
+    canvas.width = w * ratio;
+    canvas.height = (w * 0.65) * ratio;
+    canvas.style.height = (w * 0.65) + 'px';
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+    // Adjust internal dimensions for calculations
+    canvas.width = w;
+    canvas.height = w * 0.65;
+    render();
+}
+
+window.addEventListener('resize', resizeCanvas);
+
+// INIT
+resizeCanvas();
+updateFormulaDisplay();
+</script>
+
+</body>
+</html>
